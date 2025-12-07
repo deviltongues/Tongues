@@ -21,7 +21,12 @@ classifiers = [
 ]
 
 dependencies = [
-    "shiny"
+    "ipywidgets",
+    "matplotlib",
+    "plotly",
+    "refinitiv.data",
+    "shiny",
+    "types-pytz>=2022.1.1"
 ]
 
 [project.urls]
