@@ -11,6 +11,8 @@ requires-python = ">=3.12, <3.13"
 license = "MIT"
 authors = [
     { name = "Jake Vestal", email = "jmv13@duke.edu" },
+    # please add, maybe not your MAIN email, but an email you can use for
+    #    this project
 ]
 keywords = ["arbitrage", "options", "LSEG"]
 classifiers = [
@@ -32,7 +34,7 @@ dependencies = [
 [project.urls]
 Homepage = "https://http://deviltongues.website/"
 Documentation = "https://deviltongues.website/"
-Repository = ""
+Repository = "https://github.com/deviltongues/Tongues.git"
 
 [tool.hatch.metadata]
 allow-direct-references = true
