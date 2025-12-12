@@ -188,27 +188,18 @@ def server(input, output, session):
     @reactive.event(input.fetch_spot)
     def _fetch_spot():
         ric = input.underlying_ric()
+        # Record the fetch time immediately
+        fetch_time = datetime.now()
+
         try:
-            # Try to get current price with timestamp
-            df = rd.get_data(ric, fields=["TR.PriceClose", "TR.PriceCloseDate"])
-            spot_price_data.set(df["Price Close"].iloc[0])
-
-            # Check various possible column names for the date
-            date_col = None
-            for col in df.columns:
-                if "date" in col.lower() or "time" in col.lower():
-                    date_col = col
-                    break
-
-            if date_col and pd.notna(df[date_col].iloc[0]):
-                exchange_time_data.set(pd.to_datetime(df[date_col].iloc[0]).strftime("%Y-%m-%d %H:%M:%S"))
-            else:
-                exchange_time_data.set(datetime.now().strftime("%Y-%m-%d %H:%M:%S"))
-        except Exception as e:
-            # Fallback: just get the price
             df = rd.get_data(ric, fields=["TR.PriceClose"])
             spot_price_data.set(df["Price Close"].iloc[0])
-            exchange_time_data.set(datetime.now().strftime("%Y-%m-%d %H:%M:%S"))
+            # Use the recorded fetch time instead of trying to extract from data
+            exchange_time_data.set(fetch_time.strftime("%Y-%m-%d %H:%M:%S"))
+        except Exception as e:
+            # Even on error, use the fetch time
+            exchange_time_data.set(fetch_time.strftime("%Y-%m-%d %H:%M:%S"))
+            print(f"Error fetching spot price: {e}")
 
     @render.text
     def spot_price():
@@ -230,6 +221,9 @@ def server(input, output, session):
         if spot is None:
             return
 
+        # Record fetch time at the start
+        fetch_time = datetime.now()
+
         filter_str = (
             "( SearchAllCategoryv2 eq 'Options' and "
             f"(ExpiryDate gt {input.min_expiry()} and ExpiryDate lt {input.max_expiry()}) and "
@@ -248,6 +242,8 @@ def server(input, output, session):
         if chain.empty:
             option_data.set(chain)
             surface_data.set(None)
+            # Update exchange time even if no data
+            exchange_time_data.set(fetch_time.strftime("%Y-%m-%d %H:%M:%S"))
             return
 
         chain["RIC"] = chain["RIC"].astype(str)
@@ -282,6 +278,9 @@ def server(input, output, session):
 
         surf = build_surface_df(merged, spot)
         surface_data.set(surf)
+
+        # Update exchange time after successful fetch
+        exchange_time_data.set(fetch_time.strftime("%Y-%m-%d %H:%M:%S"))
 
     @render.data_frame
     def options_table():

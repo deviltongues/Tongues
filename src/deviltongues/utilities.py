@@ -35,9 +35,10 @@ print(strikes_and_expiries)
 price_data = rd.get_data(
     universe=strikes_and_expiries['RIC'].unique().tolist(),
     fields=[
-        'CF_BID', 'CF_ASK', 'CF_LAST', 'CF_CLOSE', 'CF_HIGH','CF_LOW',
-        'CF_VOLUME', 'CF_DATE', 'TR.OPENPRICE', 'DELTA', 'GAMMA', 'VEGA',
-        'THETA', 'RHO', 'THEO_VALUE', 'IMP_VOLT', 'IMP_VOLTA', 'IMP_VOLTB'
+        'CF_BID', 'CF_ASK', 'CF_LAST'
+        #,'CF_CLOSE', 'CF_HIGH','CF_LOW',
+        #'CF_VOLUME', 'CF_DATE', 'TR.OPENPRICE', 'DELTA', 'GAMMA', 'VEGA',
+        #'THETA', 'RHO', 'THEO_VALUE', 'IMP_VOLT', 'IMP_VOLTA', 'IMP_VOLTB'
     ]
 )
 print(price_data)
