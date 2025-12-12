@@ -61,15 +61,59 @@ def compute_implied_r(row):
         return np.nan
 
 
+def get_strategy_summary(signal: str) -> str:
+    """Convert full strategy to short summary"""
+    if "Sell synthetic" in signal:
+        return "Sell Call+Buy Put+Buy Stock"
+    elif "Buy synthetic" in signal:
+        return "Buy Call+Sell Put+Short Stock"
+    return signal
+
+
+def get_strategy_details(row) -> dict:
+    """Generate detailed strategy breakdown and recommendations"""
+    strategy_type = get_strategy_summary(row['signal'])
+    r_diff_pct = row['r_diff'] * 100
+
+    if strategy_type == "Reverse Conversion":
+        return {
+            "type": "Reverse Conversion Arbitrage",
+            "summary": "The synthetic stock (long call + short put) is overpriced relative to actual stock.",
+            "positions": [
+                f"• SELL Call @ ${row['K']:.0f} strike for ${row['C_mid']:.2f}",
+                f"• BUY Put @ ${row['K']:.0f} strike for ${row['P_mid']:.2f}",
+                f"• BUY underlying stock @ ${row['S']:.2f}"
+            ],
+            "rationale": f"The implied rate ({row['implied_r'] * 100:.2f}%) exceeds the risk-free rate by {abs(r_diff_pct):.2f}%, indicating mispricing.",
+            "profit": f"Net credit of ${row['C_mid'] - row['P_mid']:.2f} + dividend yield over {row['T'] * 365:.0f} days",
+            "risk": "• Execution risk across 3 legs\n• Pin risk at expiration\n• Early assignment on short call\n• Transaction costs may erode profit",
+            "recommendation": "Execute if net arbitrage exceeds 0.5% annualized after costs." if abs(
+                r_diff_pct) > 0.5 else "Profit margin may be too thin after transaction costs."
+        }
+    else:  # Conversion
+        return {
+            "type": "Conversion Arbitrage",
+            "summary": "The synthetic stock (long call + short put) is underpriced relative to actual stock.",
+            "positions": [
+                f"• BUY Call @ ${row['K']:.0f} strike for ${row['C_mid']:.2f}",
+                f"• SELL Put @ ${row['K']:.0f} strike for ${row['P_mid']:.2f}",
+                f"• SELL (short) underlying stock @ ${row['S']:.2f}"
+            ],
+            "rationale": f"The implied rate ({row['implied_r'] * 100:.2f}%) is below the risk-free rate by {abs(r_diff_pct):.2f}%, indicating mispricing.",
+            "profit": f"Net credit of ${row['S'] - row['K']:.2f} + interest earned over {row['T'] * 365:.0f} days",
+            "risk": "• Requires margin for short stock\n• Hard to borrow costs\n• Dividend risk on short stock\n• Early assignment on short put\n• Transaction costs",
+            "recommendation": "Execute if net arbitrage exceeds 1% annualized after costs, and stock is easy to borrow." if abs(
+                r_diff_pct) > 1 else "Consider borrowing costs and margin requirements before executing."
+        }
+
+
 def analyze_arbitrage(surface_df: pd.DataFrame, risk_free_rate: float = 0.05, threshold: float = 0.005):
     """
     Analyze options surface for arbitrage opportunities
     """
-    # Pivot to get calls and puts
     calls = surface_df[surface_df["CallPutOption"] == "Call"].copy()
     puts = surface_df[surface_df["CallPutOption"] == "Put"].copy()
 
-    # Merge on strike and expiry
     merged = calls.merge(
         puts,
         on=["K", "T", "S", "ExpiryDate"],
@@ -81,7 +125,6 @@ def analyze_arbitrage(surface_df: pd.DataFrame, risk_free_rate: float = 0.05, th
     merged["implied_r"] = merged.apply(compute_implied_r, axis=1)
     merged["r_diff"] = merged["implied_r"] - risk_free_rate
 
-    # Generate signals
     merged["signal"] = None
     merged.loc[merged["r_diff"] > threshold, "signal"] = "Sell synthetic, buy stock"
     merged.loc[merged["r_diff"] < -threshold, "signal"] = "Buy synthetic, short stock"
@@ -92,6 +135,51 @@ def analyze_arbitrage(surface_df: pd.DataFrame, risk_free_rate: float = 0.05, th
 # ---------- UI ----------
 app_ui = ui.page_fillable(
     ui.include_css("custom.css"),
+    ui.tags.style("""
+        .strategy-row {
+            cursor: pointer;
+            transition: background-color 0.2s;
+        }
+        .strategy-row:hover {
+            background-color: rgba(59, 130, 246, 0.1) !important;
+        }
+        .strategy-detail-card {
+            background: linear-gradient(135deg, #1e293b 0%, #0f172a 100%);
+            border: 1px solid #3b82f6;
+            border-radius: 12px;
+            padding: 20px;
+            margin-top: 20px;
+            box-shadow: 0 8px 24px rgba(59, 130, 246, 0.3);
+        }
+        .strategy-section {
+            margin-bottom: 15px;
+        }
+        .strategy-section h5 {
+            color: #3b82f6;
+            margin-bottom: 8px;
+            font-size: 0.95rem;
+        }
+        .strategy-positions {
+            background: rgba(15, 23, 42, 0.5);
+            padding: 12px;
+            border-radius: 6px;
+            margin: 8px 0;
+        }
+        .profit-highlight {
+            color: #10b981;
+            font-weight: 600;
+        }
+        .risk-highlight {
+            color: #f59e0b;
+        }
+        .recommendation-box {
+            background: rgba(59, 130, 246, 0.1);
+            border-left: 4px solid #3b82f6;
+            padding: 12px;
+            margin-top: 10px;
+            border-radius: 4px;
+        }
+    """),
     ui.div(
         {"class": "container-fluid"},
         ui.div(
@@ -153,6 +241,7 @@ app_ui = ui.page_fillable(
                             style="margin-bottom: 15px; color: #94a3b8;"
                         ),
                         ui.output_data_frame("arbitrage_table"),
+                        ui.output_ui("strategy_details"),
                     ),
                     ui.nav_panel(
                         "Trading Blotter",
@@ -190,22 +279,20 @@ def server(input, output, session):
     surface_data = reactive.Value(None)
     arbitrage_data = reactive.Value(None)
     blotter_data = reactive.Value([])
+    selected_arb_row = reactive.Value(None)
 
     # ---- spot ----
     @reactive.effect
     @reactive.event(input.fetch_spot)
     def _fetch_spot():
         ric = input.underlying_ric()
-        # Record the fetch time immediately
         fetch_time = datetime.now()
 
         try:
             df = rd.get_data(ric, fields=["TR.PriceClose"])
             spot_price_data.set(df["Price Close"].iloc[0])
-            # Use the recorded fetch time instead of trying to extract from data
             exchange_time_data.set(fetch_time.strftime("%Y-%m-%d %H:%M:%S"))
         except Exception as e:
-            # Even on error, use the fetch time
             exchange_time_data.set(fetch_time.strftime("%Y-%m-%d %H:%M:%S"))
             print(f"Error fetching spot price: {e}")
 
@@ -229,7 +316,6 @@ def server(input, output, session):
         if spot is None:
             return
 
-        # Record fetch time at the start
         fetch_time = datetime.now()
 
         filter_str = (
@@ -250,7 +336,6 @@ def server(input, output, session):
         if chain.empty:
             option_data.set(chain)
             surface_data.set(None)
-            # Update exchange time even if no data
             exchange_time_data.set(fetch_time.strftime("%Y-%m-%d %H:%M:%S"))
             return
 
@@ -287,7 +372,6 @@ def server(input, output, session):
         surf = build_surface_df(merged, spot)
         surface_data.set(surf)
 
-        # Update exchange time after successful fetch
         exchange_time_data.set(fetch_time.strftime("%Y-%m-%d %H:%M:%S"))
 
     @render.text
@@ -315,6 +399,7 @@ def server(input, output, session):
 
         arb_df = analyze_arbitrage(surf, rf_rate, threshold)
         arbitrage_data.set(arb_df)
+        selected_arb_row.set(None)  # Reset selection
 
         # Add to blotter
         current_blotter = blotter_data.get()
@@ -323,15 +408,15 @@ def server(input, output, session):
         for _, row in arb_df.iterrows():
             trade = {
                 "Timestamp": timestamp,
-                "Underlying": input.underlying_ric(),
-                "Strategy": row["signal"],
+                "Asset": input.underlying_ric(),
+                "Strategy": get_strategy_summary(row["signal"]),
                 "Strike": f"${row['K']:.0f}",
                 "Expiry": row["ExpiryDate"].strftime("%Y-%m-%d"),
-                "T": f"{row['T']:.4f}",
-                "Implied_r": f"{row['implied_r'] * 100:.2f}%",
-                "r_diff": f"{row['r_diff'] * 100:.2f}%",
-                "Call_Mid": f"${row['C_mid']:.2f}",
-                "Put_Mid": f"${row['P_mid']:.2f}",
+                "Years": f"{row['T']:.4f}",
+                "Implied Rate": f"{row['implied_r'] * 100:.2f}%",
+                "Rate Diff": f"{row['r_diff'] * 100:.2f}%",
+                "Call $": f"${row['C_mid']:.2f}",
+                "Put $": f"${row['P_mid']:.2f}",
             }
             current_blotter.append(trade)
 
@@ -340,11 +425,12 @@ def server(input, output, session):
     @render.data_frame
     def arbitrage_table():
         df = arbitrage_data.get()
-        req(df is not None)
+        req(df is not None and not df.empty)
 
-        display_df = df[["K", "T", "ExpiryDate", "signal", "implied_r", "r_diff", "C_mid", "P_mid"]].copy()
+        display_df = df.copy()
+        display_df["Strategy"] = display_df["signal"].apply(get_strategy_summary)
+        display_df = display_df[["K", "T", "ExpiryDate", "Strategy", "implied_r", "r_diff", "C_mid", "P_mid"]]
 
-        # Format numeric columns for better readability
         display_df["T"] = display_df["T"].apply(lambda x: f"{x:.4f}")
         display_df["implied_r"] = display_df["implied_r"].apply(lambda x: f"{x * 100:.2f}%")
         display_df["r_diff"] = display_df["r_diff"].apply(lambda x: f"{x * 100:.2f}%")
@@ -353,9 +439,83 @@ def server(input, output, session):
         display_df["ExpiryDate"] = pd.to_datetime(display_df["ExpiryDate"]).dt.strftime('%Y-%m-%d')
         display_df["K"] = display_df["K"].apply(lambda x: f"${x:.0f}")
 
-        display_df.columns = ["Strike", "Years to Expiry", "Expiry Date", "Strategy", "Implied Rate", "Rate Diff",
-                              "Call Price", "Put Price"]
-        return display_df
+        display_df.columns = ["Strike", "Years", "Expiry", "Strategy", "Implied r", "Rate Diff", "Call", "Put"]
+
+        return render.DataGrid(
+            display_df,
+            selection_mode="row",
+            height="400px"
+        )
+
+    @reactive.effect
+    @reactive.event(input.arbitrage_table_selected_rows)
+    def _on_row_select():
+        selected_indices = input.arbitrage_table_selected_rows()
+        if selected_indices:
+            selected_arb_row.set(selected_indices[0])
+        else:
+            selected_arb_row.set(None)
+
+    @render.ui
+    def strategy_details():
+        row_idx = selected_arb_row.get()
+        df = arbitrage_data.get()
+
+        if row_idx is None or df is None or df.empty:
+            return ui.div(
+                {"style": "margin-top: 20px; color: #64748b; text-align: center;"},
+                "Click on a row above to see detailed strategy breakdown and recommendations"
+            )
+
+        row = df.iloc[row_idx]
+        details = get_strategy_details(row)
+
+        return ui.div(
+            {"class": "strategy-detail-card"},
+            ui.h4(details["type"], style="color: #3b82f6; margin-bottom: 15px;"),
+
+            ui.div(
+                {"class": "strategy-section"},
+                ui.h5("Summary"),
+                ui.p(details["summary"], style="color: #cbd5e1;")
+            ),
+
+            ui.div(
+                {"class": "strategy-section"},
+                ui.h5("Required Positions"),
+                ui.div(
+                    {"class": "strategy-positions"},
+                    ui.HTML("<br>".join(details["positions"]))
+                )
+            ),
+
+            ui.div(
+                {"class": "strategy-section"},
+                ui.h5("Rationale"),
+                ui.p(details["rationale"], style="color: #cbd5e1;")
+            ),
+
+            ui.div(
+                {"class": "strategy-section"},
+                ui.h5("Expected Profit"),
+                ui.p(details["profit"], {"class": "profit-highlight"})
+            ),
+
+            ui.div(
+                {"class": "strategy-section"},
+                ui.h5("⚠️ Risks"),
+                ui.div(
+                    {"class": "risk-highlight", "style": "white-space: pre-line;"},
+                    details["risk"]
+                )
+            ),
+
+            ui.div(
+                {"class": "recommendation-box"},
+                ui.h5("💡 Recommendation"),
+                ui.p(details["recommendation"], style="margin: 0; color: #e2e8f0;")
+            )
+        )
 
     @render.text
     def blotter_summary():
@@ -368,19 +528,7 @@ def server(input, output, session):
     def blotter_table():
         blotter = blotter_data.get()
         req(len(blotter) > 0)
-
-        df = pd.DataFrame(blotter)
-
-        # Reorder columns for better flow
-        column_order = ["Timestamp", "Underlying", "Strategy", "Strike", "Expiry", "T",
-                        "Implied_r", "r_diff", "Call_Mid", "Put_Mid"]
-        df = df[column_order]
-
-        # Rename columns for clarity
-        df.columns = ["Time", "Asset", "Strategy", "Strike", "Expiry", "Years",
-                      "Implied Rate", "Rate Diff", "Call $", "Put $"]
-
-        return df
+        return pd.DataFrame(blotter)
 
     @reactive.effect
     @reactive.event(input.clear_blotter)
@@ -397,7 +545,6 @@ def server(input, output, session):
         if arb_df is None or arb_df.empty:
             return ui.div("No arbitrage data available. Click 'ANALYZE ARBITRAGE' first.")
 
-        # Prepare data for 3D surface
         K_vals = arb_df["K"].values
         T_vals = arb_df["T"].values
         r_vals = arb_df["implied_r"].values
@@ -405,7 +552,6 @@ def server(input, output, session):
         if len(K_vals) < 3:
             return ui.div("Insufficient data points for 3D surface. Need more strike/expiry combinations.")
 
-        # Create a grid for interpolation
         K_unique = np.sort(np.unique(K_vals))
         T_unique = np.sort(np.unique(T_vals))
 
@@ -417,19 +563,14 @@ def server(input, output, session):
             np.linspace(T_unique.min(), T_unique.max(), 30)
         )
 
-        # Interpolate r values
         try:
             r_grid = interpolate.griddata(
                 (K_vals, T_vals), r_vals, (K_grid, T_grid), method='cubic', fill_value=np.nan
             )
 
-            # Convert r to annualized percentage
             r_grid_pct = r_grid * 100
-
-            # Convert T to days for better readability
             T_grid_days = T_grid * 365
 
-            # Create 3D surface plot
             fig = go.Figure(data=[go.Surface(
                 x=K_grid,
                 y=T_grid_days,
@@ -438,7 +579,6 @@ def server(input, output, session):
                 colorbar=dict(title="Implied r, % ann")
             )])
 
-            # Format strike prices as currency on hover
             fig.update_traces(
                 hovertemplate='<b>Strike:</b> $%{x:.0f}<br>' +
                               '<b>Days to Expiry:</b> %{y:.1f}<br>' +
