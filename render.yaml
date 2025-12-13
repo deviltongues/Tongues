@@ -4,13 +4,10 @@ services:
     env: python
     region: oregon
     branch: main
+    runtime: python-3.12.0
     buildCommand: |
-      apt-get update
-      apt-get install -y gfortran libopenblas-dev
       pip install --upgrade pip
-      pip install --no-cache-dir -r requirements.txt
+      pip install --no-cache-dir numpy scipy
+      pip install -r requirements.txt
     startCommand: python -m shiny run app.py --host 0.0.0.0 --port $PORT
-    envVars:
-      - key: PYTHON_VERSION
-        value: "3.12"
     autoDeploy: true
