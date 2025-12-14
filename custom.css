@@ -377,7 +377,7 @@ table {
 
 thead th {
     background: var(--primary);
-    color: white;
+    color: darkblue;
     padding: 1rem;
     text-align: left;
     font-weight: 600;
