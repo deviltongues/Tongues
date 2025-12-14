@@ -12,7 +12,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link
-    href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap"
+    href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap"
     rel="stylesheet"
   />
 
@@ -35,7 +35,7 @@
     }
 
     .container {
-      max-width: 1200px;
+      max-width: 1100px;
       margin: 0 auto;
       padding: 20px;
     }
@@ -67,7 +67,12 @@
       font-weight: 600;
     }
 
-    h2 { color: var(--primary); margin-bottom: 0.75rem; font-size: 1.5rem; }
+    nav a.active {
+      background: #2563eb;
+      color: #ffffff;
+    }
+
+    h2 { color: var(--primary); margin: 1.25rem 0 0.6rem 0; font-size: 1.5rem; }
     p { color: #374151; margin-bottom: 0.9rem; }
 
     table {
@@ -84,6 +89,7 @@
       border-bottom: 1px solid #e5e7eb;
       text-align: left;
       color: #374151;
+      vertical-align: top;
     }
 
     th {
@@ -94,7 +100,8 @@
     ul, ol { margin-left: 1.25rem; color: #374151; }
     li { margin-bottom: 0.6rem; }
 
-    .code {
+    /* ✅ Code blocks: preserve newlines + spaces */
+    pre.code {
       background: #0b1220;
       color: #e5e7eb;
       padding: 1rem 1.1rem;
@@ -102,9 +109,34 @@
       overflow-x: auto;
       margin-top: 0.75rem;
       border: 1px solid rgba(255, 255, 255, 0.08);
-      font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", monospace;
-      font-size: 0.9rem;
-      line-height: 1.6;
+      font-family: "JetBrains Mono", ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", monospace;
+      font-size: 0.92rem;
+      line-height: 1.65;
+      white-space: pre; /* critical */
+    }
+
+    .code-wrap {
+      position: relative;
+      margin-top: 0.5rem;
+    }
+
+    .copy-btn {
+      position: absolute;
+      top: 10px;
+      right: 10px;
+      border: 1px solid rgba(255,255,255,0.15);
+      background: rgba(255,255,255,0.06);
+      color: #e5e7eb;
+      padding: 0.45rem 0.7rem;
+      border-radius: 10px;
+      font-weight: 600;
+      cursor: pointer;
+      font-size: 0.85rem;
+      backdrop-filter: blur(6px);
+    }
+
+    .copy-btn:hover {
+      background: rgba(255,255,255,0.10);
     }
 
     footer { text-align: center; color: #6b7280; }
@@ -122,7 +154,7 @@
         <a href="overview.html">Overview</a>
         <a href="strategy.html">Strategy</a>
         <a href="run.html">Run Locally</a>
-        <a href="technical.html">Technical</a>
+        <a class="active" href="technical.html">Technical</a>
       </nav>
     </header>
 
@@ -131,8 +163,8 @@
       <table>
         <thead>
           <tr>
-            <th>Component</th>
-            <th>Technology</th>
+            <th style="width: 24%;">Component</th>
+            <th style="width: 30%;">Technology</th>
             <th>Purpose</th>
           </tr>
         </thead>
@@ -176,20 +208,22 @@
       </ol>
 
       <h2>Example Snippet</h2>
-      <div class="code">
-spot_df = rd.get_data("MSFT.O", ["TR.PriceClose"])
+      <div class="code-wrap">
+        <button class="copy-btn" data-copy="#code-snippet">Copy</button>
+        <pre id="code-snippet" class="code"><code>spot_df = rd.get_data("MSFT.O", ["TR.PriceClose"])
 
 options_chain = rd.discovery.search(
     view=rd.discovery.Views.EQUITY_QUOTES,
     filter="SearchAllCategoryv2 eq 'Options' and "
            "StrikePrice ge 400 and StrikePrice le 480 and "
            "ExchangeName xeq 'OPRA'"
-)
+)</code></pre>
       </div>
 
       <h2>Project Structure</h2>
-      <div class="code">
-Tongues/
+      <div class="code-wrap">
+        <button class="copy-btn" data-copy="#code-structure">Copy</button>
+        <pre id="code-structure" class="code"><code>Tongues/
 ├── app.py
 ├── index.html
 ├── overview.html
@@ -198,11 +232,18 @@ Tongues/
 ├── technical.html
 ├── CNAME
 ├── screenshots/
-│   ├── ...
+│   ├── market-data-fetching.png
+│   ├── option-data.png
+│   ├── arbitrage-navigator.png
+│   ├── arbitrage-opportunities.png
+│   ├── arbitrage-analysis.png
+│   ├── selected-strategy.png
+│   ├── selected-strategy-continued.png
+│   └── surface-3d.png
 └── src/
     └── deviltongues/
         ├── fetch_options.py
-        └── utilities.py
+        └── utilities.py</code></pre>
       </div>
     </section>
 
@@ -210,5 +251,24 @@ Tongues/
       © DevilTongues • Author: Sunny Zhang, Victoria Li
     </footer>
   </div>
+
+  <script>
+    function copyFromSelector(selector) {
+      const el = document.querySelector(selector);
+      if (!el) return;
+      const text = el.innerText;
+      navigator.clipboard.writeText(text).catch(() => {});
+    }
+
+    document.querySelectorAll(".copy-btn").forEach((btn) => {
+      btn.addEventListener("click", () => {
+        const sel = btn.getAttribute("data-copy");
+        copyFromSelector(sel);
+        const old = btn.textContent;
+        btn.textContent = "Copied";
+        setTimeout(() => (btn.textContent = old), 900);
+      });
+    });
+  </script>
 </body>
 </html>

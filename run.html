@@ -37,7 +37,7 @@
     }
 
     .container {
-      max-width: 1200px;
+      max-width: 1100px;
       margin: 0 auto;
       padding: 20px;
     }
@@ -69,7 +69,12 @@
       font-weight: 600;
     }
 
-    h2 { color: var(--primary); margin-bottom: 0.75rem; font-size: 1.5rem; }
+    nav a.active {
+      background: #2563eb;
+      color: #ffffff;
+    }
+
+    h2 { color: var(--primary); margin: 1.25rem 0 0.6rem 0; font-size: 1.5rem; }
     p { color: #374151; margin-bottom: 0.9rem; }
 
     .warn {
@@ -77,26 +82,60 @@
       border-left: 4px solid var(--accent);
       padding: 1rem 1.1rem;
       border-radius: 12px;
-      margin-top: 1rem;
-    }
-
-    .code {
-      background: #0b1220;
-      color: #e5e7eb;
-      padding: 1rem 1.1rem;
-      border-radius: 12px;
-      overflow-x: auto;
-      font-family: "JetBrains Mono", ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", monospace;
-      margin: 0.75rem 0 1rem 0;
-      font-size: 0.9rem;
-      line-height: 1.6;
-      border: 1px solid rgba(255, 255, 255, 0.08);
+      margin-top: 0.75rem;
+      color: #374151;
     }
 
     ol { margin-left: 1.25rem; color: #374151; }
     li { margin-bottom: 0.6rem; }
 
+    /* ✅ Code blocks: preserve newlines + spaces */
+    pre.code {
+      background: #0b1220;
+      color: #e5e7eb;
+      padding: 1rem 1.1rem;
+      border-radius: 12px;
+      overflow-x: auto;
+      border: 1px solid rgba(255, 255, 255, 0.08);
+      font-family: "JetBrains Mono", ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", monospace;
+      font-size: 0.92rem;
+      line-height: 1.65;
+      margin: 0.75rem 0 1rem 0;
+      white-space: pre; /* critical */
+    }
+
+    .code-wrap {
+      position: relative;
+      margin-top: 0.5rem;
+    }
+
+    .copy-btn {
+      position: absolute;
+      top: 10px;
+      right: 10px;
+      border: 1px solid rgba(255,255,255,0.15);
+      background: rgba(255,255,255,0.06);
+      color: #e5e7eb;
+      padding: 0.45rem 0.7rem;
+      border-radius: 10px;
+      font-weight: 600;
+      cursor: pointer;
+      font-size: 0.85rem;
+      backdrop-filter: blur(6px);
+    }
+
+    .copy-btn:hover {
+      background: rgba(255,255,255,0.10);
+    }
+
     footer { text-align: center; color: #6b7280; }
+    code.inline {
+      background: #eef2ff;
+      border-radius: 6px;
+      padding: 0.15rem 0.35rem;
+      font-family: "JetBrains Mono", ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", monospace;
+      font-size: 0.92em;
+    }
   </style>
 </head>
 
@@ -110,7 +149,7 @@
         <a href="index.html">Home</a>
         <a href="overview.html">Overview</a>
         <a href="strategy.html">Strategy</a>
-        <a href="run.html">Run Locally</a>
+        <a class="active" href="run.html">Run Locally</a>
         <a href="technical.html">Technical</a>
       </nav>
     </header>
@@ -118,7 +157,7 @@
     <section>
       <h2>Prerequisites</h2>
       <div class="warn">
-        <ul style="margin-left: 1.25rem; color: #374151;">
+        <ul style="margin-left: 1.25rem;">
           <li>Python 3.12</li>
           <li>LSEG Refinitiv Data API credentials</li>
           <li>LSEG Workspace or Eikon desktop app running and signed in</li>
@@ -129,44 +168,52 @@
       <ol>
         <li>Clone the repository</li>
       </ol>
-      <div class="code">
-git clone https://github.com/deviltongues/Tongues.git
-cd Tongues
+
+      <div class="code-wrap">
+        <button class="copy-btn" data-copy="#code-clone">Copy</button>
+        <pre id="code-clone" class="code"><code>git clone https://github.com/deviltongues/Tongues.git
+cd Tongues</code></pre>
       </div>
 
       <ol start="2">
         <li>Create and activate a virtual environment</li>
       </ol>
-      <div class="code">
-python -m venv .venv
+
+      <div class="code-wrap">
+        <button class="copy-btn" data-copy="#code-venv">Copy</button>
+        <pre id="code-venv" class="code"><code>python -m venv .venv
 
 # macOS/Linux
 source .venv/bin/activate
 
-# Windows
-# .venv\Scripts\activate
+# Windows (PowerShell / CMD)
+# .venv\Scripts\activate</code></pre>
       </div>
 
       <ol start="3">
         <li>Install dependencies</li>
       </ol>
-      <div class="code">
-pip install -e .
+
+      <div class="code-wrap">
+        <button class="copy-btn" data-copy="#code-install">Copy</button>
+        <pre id="code-install" class="code"><code>pip install -e .</code></pre>
       </div>
 
       <h2>Authentication Notes</h2>
       <p>
-        The application typically uses desktop authentication through Workspace/Eikon. Keep the desktop application
-        running while using DevilTongues and confirm that API access is enabled for your account.
+        DevilTongues typically uses desktop authentication through Workspace/Eikon.
+        Keep the desktop application running while using the app and confirm that API access is enabled for your account.
       </p>
 
       <h2>Launch</h2>
-      <div class="code">
-shiny run app.py
+
+      <div class="code-wrap">
+        <button class="copy-btn" data-copy="#code-run">Copy</button>
+        <pre id="code-run" class="code"><code>shiny run app.py</code></pre>
       </div>
 
       <p>
-        By default, the app starts at <code>http://127.0.0.1:8000</code>.
+        By default, the app starts at <code class="inline">http://127.0.0.1:8000</code>.
       </p>
     </section>
 
@@ -174,5 +221,24 @@ shiny run app.py
       © DevilTongues • Author: Sunny Zhang, Victoria Li
     </footer>
   </div>
+
+  <script>
+    function copyFromSelector(selector) {
+      const el = document.querySelector(selector);
+      if (!el) return;
+      const text = el.innerText;
+      navigator.clipboard.writeText(text).catch(() => {});
+    }
+
+    document.querySelectorAll(".copy-btn").forEach((btn) => {
+      btn.addEventListener("click", () => {
+        const sel = btn.getAttribute("data-copy");
+        copyFromSelector(sel);
+        const old = btn.textContent;
+        btn.textContent = "Copied";
+        setTimeout(() => (btn.textContent = old), 900);
+      });
+    });
+  </script>
 </body>
 </html>
